@@ -1,0 +1,17 @@
+add_subdirectory(curl)
+add_subdirectory(zstd)
+add_subdirectory(json)
+add_subdirectory(glog)
+
+macro(include_third_party name)
+    include_curl(${name})
+    include_zstd(${name})
+    include_json(${name})
+    include_glog(${name})
+endmacro()
+
+macro(link_third_party name)
+    link_curl(${name})
+    link_zstd(${name})
+    link_glog(${name})
+endmacro()
