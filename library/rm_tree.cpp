@@ -204,6 +204,12 @@ bool rm_tree::is_system_error() const {
   return std::get_if<std::system_error>(&worker.worker_error.value()) != nullptr;
 }
 
+bool rm_tree::is_indexed_error() const {
+  if (!has_worker_error())
+    return false;
+  return std::get_if<indexed_error>(&worker.worker_error.value()) != nullptr;
+}
+
 bool rm_tree::is_runtime_error() const {
   if (!has_worker_error())
     return false;
@@ -216,6 +222,14 @@ int rm_tree::get_worker_sys_error_code() const {
   if (!is_system_error())
     return -1;
   return std::get<std::system_error>(worker.worker_error.value()).code().value();
+}
+
+error_code_t rm_tree::get_worker_indexed_error_code() const {
+  if (!has_worker_error())
+    return kNoError;
+  if (!is_indexed_error())
+    return kUnknownError;
+  return std::get<indexed_error>(worker.worker_error.value()).index();
 }
 
 std::string rm_tree::get_worker_error_str() const {
@@ -312,7 +326,7 @@ std::string rm_tree::fetch_url_path_content(const std::string &path) {
     L_VERBOSE(1, "Fetch URL path content process: {}", downloaded_size);
     return downloaded_size;
   };
-  auto max_fails_count = kMaxCdnErrorsCount * cdns.size();
+  const auto max_fails_count = 3;
   auto fails_count = 0;
   while (error_code != CURLE_OK) {
     auto cdn = get_current_cdn();
@@ -335,18 +349,24 @@ std::string rm_tree::fetch_url_path_content(const std::string &path) {
       }
     });
     long response_code = 0;
+    error_code_t indexed_error_code = kNoError;
     switch (error_code) {
     case CURLE_OK:curl_easy_getinfo(ch, CURLINFO_RESPONSE_CODE, &response_code);
       break;
     case CURLE_COULDNT_RESOLVE_PROXY:error_str = "Couldn't resolve proxy.";
+      indexed_error_code = kCouldNotResolveProxy;
       break;
     case CURLE_COULDNT_RESOLVE_HOST:error_str = "Couldn't resolve host.";
+      indexed_error_code = kCouldNotResolveHost;
       break;
     case CURLE_COULDNT_CONNECT:error_str = "Couldn't connect to host.";
+      indexed_error_code = kCouldNotConnectToHost;
       break;
     case CURLE_REMOTE_ACCESS_DENIED:error_str = "Couldn't connect to host: remote access denied.";
+      indexed_error_code = kCouldNotConnectToHostRemoteAccessDenied;
       break;
     default:error_str = "Unknown CURL error: " + std::to_string(error_code) + ".";
+      indexed_error_code = kUnknownCurlError;
       break;
     }
 
@@ -357,18 +377,24 @@ std::string rm_tree::fetch_url_path_content(const std::string &path) {
       error_str = "The request was proceeded correctly, but host returned an unknown HTTP code: "
           + std::to_string(response_code) + ".";
       error_code = CURL_LAST;
+      indexed_error_code = kUnknownHttpCodeResponse;
     }
 
     auto has_error = !error_str.empty() || (is_http && response_code != 200);
     if (has_error) {
       ++fails_count;
+      worker.current_cdn_errors_count = kMaxCdnErrorsCount + 1;
       error_str += " Problematic URL path was: ";
       error_str += url != nullptr ? url : "Unknown url";
     }
 
     if (fails_count >= max_fails_count) {
-      error_str += " Could't receive data " + std::to_string(fails_count) + " times.";
-      throw std::runtime_error(error_str);
+      error_str += " Couldn't receive data " + std::to_string(fails_count) + " times.";
+      if (indexed_error_code == kNoError) {
+        throw std::runtime_error(error_str);
+      } else {
+        throw indexed_error(indexed_error_code, error_str);
+      }
     }
   }
   return ret;
@@ -472,7 +498,10 @@ void rm_tree::download_worker(rm_tree &tree, worker_process_data_t *process_data
     if (this_worker->abort)
       return CURL_READFUNC_ABORT;
     auto downloaded_size = size * nmemb;
-    L_VERBOSE(1, "Downloaded worker process (bytes): {}, file: {}", downloaded_size, this_worker->item.relative_path.string());
+    L_VERBOSE(1,
+              "Downloaded worker process (bytes): {}, file: {}",
+              downloaded_size,
+              this_worker->item.relative_path.string());
     this_worker->downloaded_size += downloaded_size;
     this_worker->stream.write(reinterpret_cast<char *>(contents), downloaded_size);
     return downloaded_size;
@@ -537,7 +566,7 @@ void rm_tree::download_worker(rm_tree &tree, worker_process_data_t *process_data
         }
       } while (still_running > 0);
       if (downloader_data.force_stop)
-        throw std::runtime_error("Force stopped downloader process");
+        throw indexed_error(kForceStoppedProcess, "Force stopped downloader process");
       int msgs_left = 0;
       while (auto msg = curl_multi_info_read(curlm, &msgs_left)) {
         if (msg->msg == CURLMSG_DONE) {
@@ -571,7 +600,7 @@ void rm_tree::download_worker(rm_tree &tree, worker_process_data_t *process_data
           switch (error_code) {
           case CURLE_ABORTED_BY_CALLBACK:
             // code won't reach here, but anyway, just to be sure
-            throw std::runtime_error("Force stopped downloader process");
+            throw indexed_error(kForceStoppedProcess, "Force stopped downloader process");
             break;
           case CURLE_OK:curl_easy_getinfo(ch, CURLINFO_RESPONSE_CODE, &response_code);
             break;
@@ -638,6 +667,10 @@ void rm_tree::download_worker(rm_tree &tree, worker_process_data_t *process_data
     if (process_data != nullptr)
       throw fail; // let the parent to handle it
     tree.worker.worker_error = fail;
+  } catch (const indexed_error &fail) {
+    if (process_data != nullptr)
+      throw fail; // let the parent to handle it
+    tree.worker.worker_error = fail;
   } catch (const std::runtime_error &fail) {
     if (process_data != nullptr)
       throw fail; // let the parent to handle it
@@ -665,7 +698,7 @@ void rm_tree::updates_fetcher_worker(rm_tree &tree, worker_process_data_t *proce
   try {
     auto data = tree.fetch_url_path_content(common::kResourcesDataFilename);
     if (fetcher_data.force_stop)
-      throw std::runtime_error("Force stopped check worker");
+      throw indexed_error(kForceStoppedProcess, "Force stopped check worker");
     auto data_json = nlohmann::json::parse(data);
     tree.items.clear();
     for (auto &entry : data_json) {
@@ -675,6 +708,10 @@ void rm_tree::updates_fetcher_worker(rm_tree &tree, worker_process_data_t *proce
       updates_fetcher_worker(dependency, &fetcher_data);
     }
   } catch (const std::system_error &fail) {
+    if (process_data != nullptr)
+      throw fail; // let the parent to handle it
+    tree.worker.worker_error = fail;
+  } catch (const indexed_error &fail) {
     if (process_data != nullptr)
       throw fail; // let the parent to handle it
     tree.worker.worker_error = fail;
@@ -715,7 +752,7 @@ void rm_tree::check_worker(rm_tree &tree, worker_process_data_t *process_data) {
   try {
     for (auto &item : items) {
       if (checker_data.force_stop)
-        throw std::runtime_error("Force stopped check worker");
+        throw indexed_error(kForceStoppedProcess, "Force stopped check worker");
 
       if (!tree.is_entry_valid(item))
         pending_download_items.emplace_back(item);
@@ -725,6 +762,10 @@ void rm_tree::check_worker(rm_tree &tree, worker_process_data_t *process_data) {
       check_worker(dependency, &checker_data);
     }
   } catch (const std::system_error &fail) {
+    if (process_data != nullptr)
+      throw fail; // let the parent to handle it
+    tree.worker.worker_error = fail;
+  } catch (const indexed_error &fail) {
     if (process_data != nullptr)
       throw fail; // let the parent to handle it
     tree.worker.worker_error = fail;
@@ -749,5 +790,73 @@ void rm_tree::check_worker(rm_tree &tree, worker_process_data_t *process_data) {
 }
 
 void rm_tree::remove_modifications_worker(rm_tree &tree, worker_process_data_t *process_data) {
-  throw std::runtime_error("Not implemented");
+  auto &worker = tree.worker;
+  auto &checker_data = process_data != nullptr ? *process_data : worker.process_data;
+  auto &total_check_files_count = checker_data.total_work_amount;
+  auto &checked_files_count = checker_data.processed_work_amount;
+
+  auto items = tree.get_all_entries();
+
+  std::function<void(const std::filesystem::path &dir, const bool counting)> process_directory;
+  process_directory = [&](const std::filesystem::path &dir, const bool counting) {
+    for (auto &this_path : std::filesystem::directory_iterator{dir}) {
+      if (checker_data.force_stop)
+        throw indexed_error(kForceStoppedProcess, "Force stopped modifications remover");
+
+      if (is_directory(this_path)) {
+        L_VERBOSE(1, "Processing directory: {}; counting: {}", this_path.path().string(), counting);
+        process_directory(this_path, counting);
+      } else if (is_regular_file(this_path)) {
+        L_VERBOSE(1, "Processing file: {}; counting: {}", this_path.path().string(), counting);
+        if (!counting) {
+          if (!std::any_of(items.cbegin(), items.cend(), [&](const rm_entry &entry) {
+            return tree.get_entry_full_path(entry) == this_path;
+          })) {
+            remove(this_path);
+          }
+          ++checked_files_count;
+        } else {
+          ++total_check_files_count;
+        }
+      }
+    }
+  };
+
+  try {
+    L_INFO("Modifications remover started");
+
+    if (process_data == nullptr) { // only root tree has to do this
+      total_check_files_count = 0;
+      checked_files_count = 0;
+      process_directory(tree.base_path, true);
+    }
+    L_INFO("Modifications remover: total items count: {}", total_check_files_count.load());
+
+    process_directory(tree.base_path, false);
+  } catch (const std::system_error &fail) {
+    if (process_data != nullptr)
+      throw fail; // let the parent to handle it
+    tree.worker.worker_error = fail;
+  } catch (const indexed_error &fail) {
+    if (process_data != nullptr)
+      throw fail; // let the parent to handle it
+    tree.worker.worker_error = fail;
+  } catch (const std::runtime_error &fail) {
+    if (process_data != nullptr)
+      throw fail; // let the parent to handle it
+    tree.worker.worker_error = fail;
+  } catch (const std::exception &exc) {
+    if (process_data != nullptr)
+      throw exc; // let the parent to handle it
+    tree.worker.worker_error = exc;
+  }
+
+  if (tree.has_worker_error()) {
+    L_ERROR("Exception during removing modifications: {}", tree.get_worker_error_str());
+  }
+
+  L_INFO("Modifications remover completed");
+
+  worker.last_state = worker.current_state.load();
+  worker.current_state = worker_mode_t::kNone;
 }

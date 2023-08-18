@@ -24,18 +24,34 @@
 
 #ifndef RM_EXPORT
 #ifdef RM_BUILDING_DLL
+#ifdef RM_EXPORT_SYMBOLS
 #define RM_EXPORT __declspec(dllexport)
 #else
 #define RM_EXPORT __declspec(dllimport)
 #endif
+#else
+#define RM_EXPORT
+#endif
 #endif
 
 enum error_code_t {
+  kUnknownError = -1,
+
   kNoError,
   kCannotWhenWorking,
   kCannotAfterStarted,
   kCannotWhenNothingToDownload,
-  kCannotWhenNotWorking
+  kCannotWhenNotWorking,
+
+  kForceStoppedProcess,
+  kCouldNotResolveHost,
+  kCouldNotResolveProxy,
+  kCouldNotConnectToHost,
+  kCouldNotConnectToHostRemoteAccessDenied,
+  kUnknownHttpCodeResponse,
+  kUnknownCurlError,
+
+  kMaxErrorCode
 };
 
 #ifdef __cplusplus
@@ -79,8 +95,10 @@ RM_EXPORT error_code_t rm_tree_stop_removing_modifications(rm_tree *tree);
 
 RM_EXPORT bool rm_tree_has_worker_errors(rm_tree *tree);
 RM_EXPORT bool rm_tree_is_system_error(rm_tree *tree);
+RM_EXPORT bool rm_tree_is_indexed_error(rm_tree *tree);
 RM_EXPORT bool rm_tree_is_runtime_error(rm_tree *tree);
 RM_EXPORT int rm_tree_get_worker_sys_error_code(rm_tree *tree);
+RM_EXPORT error_code_t rm_tree_get_worker_indexed_error_code(rm_tree *tree);
 RM_EXPORT bool rm_tree_get_worker_error_str(rm_tree *tree, char *str, int str_capacity);
 
 RM_EXPORT uint64_t rm_tree_get_total_work_amount(rm_tree *tree);

@@ -27,6 +27,7 @@
 #include "rm_cdn.h"
 #include "rm_entry.h"
 #include "resources_manager.h"
+#include "indexed_error.hpp"
 
 class rm_tree {
   std::vector<rm_cdn> cdns; // all cdns related to this project
@@ -79,6 +80,7 @@ class rm_tree {
 
     std::optional<std::variant<
         std::system_error,
+        indexed_error,
         std::runtime_error,
         std::exception
       >> worker_error;
@@ -128,8 +130,10 @@ public:
   // Workers data helpers
   bool has_worker_error() const;
   bool is_system_error() const;
+  bool is_indexed_error() const;
   bool is_runtime_error() const;
   int get_worker_sys_error_code() const;
+  error_code_t get_worker_indexed_error_code() const;
   std::string get_worker_error_str() const;
 
   uint64_t get_total_work_amount() const;

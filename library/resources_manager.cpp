@@ -118,8 +118,16 @@ bool rm_tree_is_system_error(rm_tree *tree) {
   return tree->is_system_error();
 }
 
+bool rm_tree_is_indexed_error(rm_tree *tree) {
+  return tree->is_indexed_error();
+}
+
 bool rm_tree_is_runtime_error(rm_tree *tree) {
   return tree->is_runtime_error();
+}
+
+error_code_t rm_tree_get_worker_indexed_error_code(rm_tree *tree) {
+  return tree->get_worker_indexed_error_code();
 }
 
 int rm_tree_get_worker_sys_error_code(rm_tree *tree) {
