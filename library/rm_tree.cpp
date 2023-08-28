@@ -29,6 +29,11 @@ rm_tree::rm_tree(std::filesystem::path base_path)
   static bool once = false;
   if (!once) {
     curl_global_init(CURL_GLOBAL_ALL);
+#if __has_include(<glog/logging.h>)
+    if (!google::IsGoogleLoggingInitialized()) {
+      google::InitGoogleLogging("resources_downloader");
+    }
+#endif
     once = true;
   }
   worker.current_cdn = cdns.cend();
@@ -375,7 +380,7 @@ std::string rm_tree::fetch_url_path_content(const std::string &path) {
 
     if (error_code == CURLE_OK && is_http && response_code != 200) {
       error_str = "The request was proceeded correctly, but host returned an unknown HTTP code: "
-          + std::to_string(response_code) + ".";
+          + std::to_string(response_code) + ". Remote response body: " + ret;
       error_code = CURL_LAST;
       indexed_error_code = kUnknownHttpCodeResponse;
     }

@@ -73,11 +73,13 @@ rm_cdn::rm_cdn(std::string url) : base_url(std::move(url)) {
 }
 
 void rm_cdn::add_header(const std::string &key, const std::string &value) {
+  L_VERBOSE(1, "Added new header value: {}: {}", key, value);
   headers[key] = value;
 }
 
 void rm_cdn::remove_header(const std::string &key) {
   if (headers.find(key) == headers.cend()) return;
+  L_VERBOSE(1, "Removed a header value: {}", key);
   headers.erase(key);
 }
 
@@ -106,6 +108,8 @@ rm_cdn::easy_init_t rm_cdn::easy_init(const std::string &path) const {
     return ret;
   }
   curl_easy_setopt(ret.ch, CURLOPT_URL, build_url(path).c_str());
+  if (!custom_cacert_filepath.empty())
+    curl_easy_setopt(ret.ch, CURLOPT_CAINFO, custom_cacert_filepath.c_str());
   if (is_http() && !headers.empty()) {
     curl_slist *curl_headers = nullptr;
     for (auto &entry : headers) {
@@ -131,4 +135,8 @@ rm_cdn::easy_init_t rm_cdn::easy_init(const std::string &path) const {
 
 bool rm_cdn::is_http() const {
   return is_http_;
+}
+
+void rm_cdn::set_custom_cacert_filepath(const std::string &path) {
+  custom_cacert_filepath = path;
 }

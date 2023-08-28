@@ -23,7 +23,7 @@
 #pragma once
 
 #ifndef RM_EXPORT
-#ifdef RM_BUILDING_DLL
+#if defined RM_BUILDING_DLL && WIN32
 #ifdef RM_EXPORT_SYMBOLS
 #define RM_EXPORT __declspec(dllexport)
 #else
@@ -113,6 +113,7 @@ RM_EXPORT void rm_cdn_destroy(rm_cdn *cdn);
 
 RM_EXPORT void rm_cdn_add_header(rm_cdn *cdn, const char *key, const char *value);
 RM_EXPORT void rm_cdn_remove_header(rm_cdn *cdn, const char *key);
+RM_EXPORT void rm_cdn_set_custom_cacert_filepath(rm_cdn *cdn, const char *path);
 
 #ifdef __cplusplus
 }

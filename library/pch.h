@@ -34,22 +34,31 @@
 #include <random>
 #include <variant>
 #include <optional>
-#include <format>
 
 #include <curl/curl.h>
 #include <zstd.h>
 #include <json.hpp>
 
+#if __has_include(<format>) && __has_include(<glog/logging.h>)
+#include <format>
+
 #define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <glog/logging.h>
 #include <glog/log_severity.h>
 
-#if 1
 #define L_WARN(text, ...) LOG(WARNING) << std::format(text "\n" __VA_OPT__(,) __VA_ARGS__)
 #define L_INFO(text, ...) LOG(INFO) << std::format(text "\n" __VA_OPT__(,) __VA_ARGS__)
 #define L_ERROR(text, ...) LOG(ERROR) << std::format(text "\n" __VA_OPT__(,) __VA_ARGS__)
 #define L_VERBOSE(level, text, ...) VLOG(level) << std::format(text "\n" __VA_OPT__(,) __VA_ARGS__)
+#elif defined __ANDROID__ && __has_include(<fmt/core.h>)
+#include <android/log.h>
+#include <fmt/core.h>
+#define L_WARN(text, ...) __android_log_print(ANDROID_LOG_WARN, "ResourcesMgr", "%s", fmt::format(text __VA_OPT__(,) __VA_ARGS__).c_str())
+#define L_INFO(text, ...) __android_log_print(ANDROID_LOG_INFO, "ResourcesMgr", "%s", fmt::format(text __VA_OPT__(,) __VA_ARGS__).c_str())
+#define L_ERROR(text, ...) __android_log_print(ANDROID_LOG_ERROR, "ResourcesMgr", "%s", fmt::format(text __VA_OPT__(,) __VA_ARGS__).c_str())
+#define L_VERBOSE(level, text, ...) __android_log_print(ANDROID_LOG_VERBOSE, "ResourcesMgr", "%s", fmt::format(text __VA_OPT__(,) __VA_ARGS__).c_str())
 #else
+#pragma message ("No logging library was found, disabling all logging messages...")
 #define L_WARN(text, ...)
 #define L_INFO(text, ...)
 #define L_ERROR(text, ...)

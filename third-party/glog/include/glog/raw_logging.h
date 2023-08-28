@@ -172,7 +172,7 @@ static inline void RawLogStub__(int /* ignored */, ...) {
 // This does not allocate memory or acquire locks.
 GLOG_EXPORT void RawLog__(LogSeverity severity, const char* file, int line,
                           const char* format, ...)
-    __attribute__((__format__(__printf__, 4, 5)));
+    ;
 
 }
 

@@ -170,7 +170,7 @@ typedef void(*CustomPrefixCallback)(std::ostream& s, const LogMessageInfo& l, vo
 // the absence of better information (ie. -fprofile-arcs).
 //
 #ifndef GOOGLE_PREDICT_BRANCH_NOT_TAKEN
-#if 1
+#if 0
 #define GOOGLE_PREDICT_BRANCH_NOT_TAKEN(x) (__builtin_expect(x, 0))
 #else
 #define GOOGLE_PREDICT_BRANCH_NOT_TAKEN(x) x
@@ -178,7 +178,7 @@ typedef void(*CustomPrefixCallback)(std::ostream& s, const LogMessageInfo& l, vo
 #endif
 
 #ifndef GOOGLE_PREDICT_FALSE
-#if 1
+#if 0
 #define GOOGLE_PREDICT_FALSE(x) (__builtin_expect(x, 0))
 #else
 #define GOOGLE_PREDICT_FALSE(x) x
@@ -186,7 +186,7 @@ typedef void(*CustomPrefixCallback)(std::ostream& s, const LogMessageInfo& l, vo
 #endif
 
 #ifndef GOOGLE_PREDICT_TRUE
-#if 1
+#if 0
 #define GOOGLE_PREDICT_TRUE(x) (__builtin_expect(!!(x), 1))
 #else
 #define GOOGLE_PREDICT_TRUE(x) x
@@ -762,7 +762,7 @@ GLOG_EXPORT void MakeCheckOpValueString(std::ostream* os,
 // Build the error message string. Specify no inlining for code size.
 template <typename T1, typename T2>
 std::string* MakeCheckOpString(const T1& v1, const T2& v2, const char* exprtext)
-    __attribute__((noinline));
+    ;
 
 namespace base {
 namespace internal {

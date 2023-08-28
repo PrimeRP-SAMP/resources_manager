@@ -136,7 +136,14 @@ int rm_tree_get_worker_sys_error_code(rm_tree *tree) {
 
 bool rm_tree_get_worker_error_str(rm_tree *tree, char *str, int str_capacity) {
   auto stdstr = tree->get_worker_error_str();
+#if WIN32
   return strcpy_s(str, str_capacity, stdstr.c_str()) != 0;
+#else
+  if (str_capacity <= stdstr.size())
+    return false;
+  strcpy(str, stdstr.c_str());
+  return true;
+#endif
 }
 
 uint64_t rm_tree_get_total_work_amount(rm_tree *tree) {
@@ -167,4 +174,8 @@ void rm_cdn_add_header(rm_cdn *cdn, const char *key, const char *value) {
 
 void rm_cdn_remove_header(rm_cdn *cdn, const char *key) {
   cdn->remove_header(key);
+}
+
+void rm_cdn_set_custom_cacert_filepath(rm_cdn *cdn, const char *path) {
+  cdn->set_custom_cacert_filepath(path);
 }

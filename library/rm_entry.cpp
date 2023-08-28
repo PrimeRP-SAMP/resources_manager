@@ -28,6 +28,9 @@ rm_entry::rm_entry() {
 
 rm_entry::rm_entry(const nlohmann::json &json) {
   std::string path = json["p"];
+#ifndef WIN32
+  std::replace(path.begin(), path.end(), '\\', '/');
+#endif
   relative_path = path;
   size = static_cast<uint64_t>(json["s"]);
   fnv_hash = json["h"];
@@ -40,5 +43,3 @@ rm_entry::rm_entry(const nlohmann::json &json) {
 bool rm_entry::operator==(const rm_entry &other) const {
   return relative_path == other.relative_path;
 }
-
-

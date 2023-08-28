@@ -31,6 +31,7 @@ class rm_cdn {
   std::string base_url;
   std::unordered_map<std::string, std::string> headers;
   bool is_http_;
+  std::string custom_cacert_filepath;
 public:
   struct easy_init_t {
     CURLM *linked_curlm = nullptr;
@@ -57,4 +58,6 @@ public:
   std::string build_url(std::string path) const;
   easy_init_t easy_init(const std::string &path) const;
   bool is_http() const;
+
+  void set_custom_cacert_filepath(const std::string &path);
 };
